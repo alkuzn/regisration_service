@@ -4,27 +4,6 @@ services:
     container_name: auth_service
     ports:
       - "${APP_PORT}:${APP_PORT}"
-    environment:
-      APP_HOST: 0.0.0.0
-      DB_HOST: db_postgres
-      REDIS_HOST: cache_redis
-    depends_on:
-      migrate_db:
-        condition: service_completed_successfully
-      db_postgres:
-        condition: service_healthy
-    networks:
-      common:
-    volumes:
-      - ./src:/app/src
-
-include:
-   - migration_service.yaml
-   - postgres_service.yaml
-   - redis_service.yaml
-
-networks:
-  common:
-
-volumes:
-  migrations:
+    env_file: .env
+    healthcheck:
+      test: curl -f http://auth_service:${APP_PORT}/health

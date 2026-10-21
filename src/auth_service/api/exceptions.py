@@ -18,3 +18,10 @@ class BadCodeException(HTTPException):
 
 class DatabaseConnectionException(Exception):
     pass
+
+
+class UserNotFound(HTTPException):
+    def __init__(self):
+        status_code = status.HTTP_400_BAD_REQUEST
+        detail = "Пользователь не найден."
+        super().__init__(status_code, detail)

@@ -9,6 +9,6 @@ class Base(DeclarativeBase):
 
 
 url_db = settings.db.asyncurl
-engine = create_async_engine(url_db, echo=True)
+engine = create_async_engine(url_db, echo=False)
 
 SessionMaker = async_sessionmaker(engine)
