@@ -3,24 +3,29 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 
 import redis.asyncio as redis
-from aiologger import Logger
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.exceptions import ConnectionError
 
 from auth_service.api.exceptions import DatabaseConnectionException
-from auth_service.api.func import CodeCarrier
+from auth_service.api.func import CodeCarrier, Jwk
 from auth_service.api.handles import router
 from auth_service.config import settings
 from auth_service.db.main import engine
+from auth_service.logging_s import AsyncLogger, request_id_contextvar
 
-logger: Logger = Logger.with_default_handlers(name=__name__)
+logger = AsyncLogger(__name__)
 
 
 @asynccontextmanager
 async def life(app: FastAPI):
-    app.state.jwt_key = "123"
+    try:
+        app.state.jwk = Jwk(settings.app.key_path)
+    except Exception as ex:
+        await logger.error(f"При получении ключа возникла ошибка: {str(ex)}")
+        exit()
+    app.state.request_id = request_id_contextvar
     app.state.jwt_timedelta = timedelta(days=1)
     app.state.redis = redis.from_url(settings.redis.url, decode_responses=True)
     app.state.code_carrier = CodeCarrier(app.state.redis)
@@ -29,6 +34,7 @@ async def life(app: FastAPI):
     except ConnectionError as ex:
         await logger.error(f"Ошибка подключения к redis: {str(ex)}")
     yield
+    await app.state.redis.close()
     await engine.dispose()  # Данные теряются?
 
 
@@ -50,7 +56,7 @@ async def general_validation_handler(request: Request, ex: RequestValidationErro
             case {"type": "missing", "loc": ("body", field_name)}:
                 msg = f"Не указано поле {field_name}."
             case _:
-                await logger.info(f"{request.state.id}; unknown error; data={err}")
+                await logger.info(f"unknown error: {err}")
                 msg = "Неизвестная ошибка"
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": msg}
@@ -66,8 +72,7 @@ async def han(request: Request, ex: DatabaseConnectionException):
 
 @app.middleware("http")
 async def logger_mid(request: Request, callnext):
-    request_id = secrets.token_hex(10)
-    request.state.id = request_id
-    await logger.info(f"{request_id}; {request.headers['user-agent']}")
+    request.app.state.request_id.set(secrets.token_hex(10))
+    await logger.info(f"{request.headers['user-agent']}")
     response = await callnext(request)
     return response

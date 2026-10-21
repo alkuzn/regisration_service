@@ -59,6 +59,7 @@ class UvicornSettings(Base):
 class AppSettings(Base):
     host: str
     port: int
+    key_path: str
     model_config = SettingsConfigDict(env_prefix="APP_")
 
 

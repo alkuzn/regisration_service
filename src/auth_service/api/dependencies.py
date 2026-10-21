@@ -1,12 +1,13 @@
+import secrets
 from typing import Annotated
 
-from aiologger import Logger
 from fastapi import Body, Request
 
 from auth_service.api.exceptions import BadCodeException, DatabaseConnectionException
 from auth_service.db import SessionMaker
+from auth_service.logging_s import AsyncLogger
 
-logger: Logger = Logger.with_default_handlers(name=__name__)
+logger = AsyncLogger(__name__)
 
 
 async def get_db(request: Request):
@@ -14,8 +15,8 @@ async def get_db(request: Request):
     try:
         yield sess
     except ConnectionRefusedError as ex:
-        msg = f"{request.state.id}; Ошибка подключения к базе данных: {str(ex)}"
-        await logger.error(msg)
+        msg = f"Ошибка подключения к базе данных"
+        await logger.error(f"{msg}: {str(ex)}")
         raise DatabaseConnectionException(msg)
     finally:
         await sess.close()
@@ -32,5 +33,9 @@ async def verify_code(
     return result
 
 
-def get_request_id(request: Request):
-    return request.state.id
+def get_code_carrier(request: Request):
+    return request.app.state.code_carrier
+
+
+def gen_session_id():
+    return secrets.token_hex(32)
